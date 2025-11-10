@@ -42,95 +42,48 @@ class CurriculumGenerator:
             Dict with 'phases' (list) and 'metadata' (dict)
         """
         
-        prompt = f"""You are generating GAME PHASES for {sport} using the Enhanced Methodology V3.
+        prompt = f"""You are generating GAME PHASES for {sport}.
 
 CRITICAL UNDERSTANDING:
 
-**Phase = Game SITUATION (not a tactical response)**
-- Defined ONLY by: possession state + location
-- Example: "Offensive Zone Attack" = We have puck + We're in offensive zone
-- NOT a play or tactic - just the situation
+**Phase = Overarching game situation defined by possession state and location (NOT tactical response)**
 
-**What Phases Are NOT:**
-❌ NOT tactical actions (those are "plays")
-❌ NOT specific plays ("Drive to Net" is a play, not a phase)
-❌ NOT movements ("Skating" is not a phase)
-❌ NOT general concepts ("Transition" alone is too vague)
+**Ice Hockey Phase Examples:**
+- "Offensive Zone Attack" - We have puck in offensive zone
+- "Defensive Zone Coverage" - Opponent has puck in our defensive zone
+- "Breakout" - We have puck in defensive zone, moving to neutral
+- "Neutral Zone Transition" - Either team has puck in neutral zone
+- "Offensive Zone Pressure" - Opponent has puck in offensive zone (we're forechecking)
 
-**What Phases ARE:**
-✅ Game situations where possession + location define the context
-✅ Clear entry/exit based on puck/ball movement
-✅ Cover ALL possible game situations (no gaps)
+**Phases are SITUATIONS, not tactics:**
+✅ Defined by: Possession state + Location on ice
+✅ Clear entry/exit conditions (crossing blue lines, possession changes)
+✅ Cover ALL possible game situations
 ✅ No overlaps (can't be in two phases at once)
 
-**EXAMPLE - ICE HOCKEY PHASES (Your Reference):**
+**Use Expert Debate System (5 personas):**
+1. Technical Specialist - "Mechanically sound boundaries?"
+2. Game Analyst - "Covers all game situations?"
+3. Development Expert - "Teachable to youth?"
+4. Biomechanics Specialist - "Safe movement transitions?"
+5. Best Coach Ever - "Practical for coaches?"
 
-Phase 1: "Offensive Zone Attack"
-- Location: Offensive zone (opponent's end)
-- Possession: Team has puck
-- Entry: Puck crosses blue line with possession OR gain possession in zone
-- Exit: Puck leaves zone OR lose possession
-- Objective: Score or create scoring chances
+**Generate 5-6 phases for {sport}.**
 
-Phase 2: "Defensive Zone Coverage"  
-- Location: Defensive zone (our end)
-- Possession: Opponent has puck
-- Entry: Opponent enters zone with puck OR turnover in zone
-- Exit: Puck cleared OR regain possession
-- Objective: Prevent goals, regain possession
-
-Phase 3: "Neutral Zone - Team Possession"
-- Location: Neutral zone (middle ice)
-- Possession: Team has puck
-- Entry: Team gains possession in neutral zone OR exits defensive zone
-- Exit: Enter offensive zone OR lose possession
-- Objective: Advance puck to offense
-
-Phase 4: "Neutral Zone - Opponent Possession"
-- Location: Neutral zone (middle ice)
-- Possession: Opponent has puck
-- Entry: Opponent has puck in neutral zone
-- Exit: Opponent enters our zone OR we regain possession
-- Objective: Prevent zone entry, force turnover
-
-(You would add 2-4 more phases to cover faceoffs, special teams, etc.)
-
-**KEY RULE:** Phases are SITUATIONS. Plays are TACTICAL RESPONSES to those situations.
-
----
-
-YOUR TASK:
-
-Generate 4-8 game phases for {sport} following this understanding.
-
-Use Expert Debate System (5 personas):
-1. Technical Specialist - "Is this structurally sound?"
-2. Game Analyst - "Does this cover real game situations?"
-3. Development Expert - "Can youth players understand this?"
-4. Biomechanics Specialist - "Is this physically sensible?"
-5. Best Coach Ever - "Will coaches understand and use this?"
-
-REQUIREMENTS:
-- Each phase = possession state + location (nothing more)
-- Clear entry/exit conditions
-- Zero overlaps between phases
-- 100% coverage (all game situations included)
-- Objective describes what team is trying to do IN THAT SITUATION
-
-OUTPUT FORMAT (JSON only, no other text):
+OUTPUT ONLY THIS JSON (no other text):
 
 {{
-  "debate_summary": "Summary of expert debate: What phases were chosen and why",
+  "debate_summary": "Summary of expert debate and why these phases",
   "phases": [
     {{
       "phase_id": "P1",
-      "phase_name": "Name of situation (not a tactic)",
-      "location": "Where on playing surface",
-      "possession_state": "Who has possession of ball/puck",
-      "entry_condition": "What triggers entry into this phase",
-      "exit_condition": "What triggers exit from this phase",
-      "primary_objective": "What team is trying to accomplish in this situation",
-      "validation_score": 0.95
+      "phase_name": "Phase Name (the SITUATION)",
+      "location": "Where on ice",
+      "possession_state": "Who has puck",
+      "entry_condition": "What triggers entry",
+      "exit_condition": "What triggers exit",
+      "primary_objective": "What team is trying to do",
+      "validation_score": 0.97
     }}
   ],
   "quality_metrics": {{
@@ -139,18 +92,13 @@ OUTPUT FORMAT (JSON only, no other text):
     "clarity_score": 0.96,
     "consensus_achieved": true
   }},
-  "expert_consensus": "Why these phases correctly define all game situations for {sport}"
+  "expert_consensus": "Why these phases are correct"
 }}
-
-Think step by step. Generate phases that are SITUATIONS, not tactics.
-Output ONLY valid JSON.
 """
         
         response = self._call_claude(prompt, max_tokens=8000)
         
-        # Parse JSON from response
         try:
-            # Try to extract JSON if there's extra text
             json_match = re.search(r'\{.*\}', response, re.DOTALL)
             if json_match:
                 result = json.loads(json_match.group())
@@ -159,7 +107,6 @@ Output ONLY valid JSON.
             
             return result
         except json.JSONDecodeError as e:
-            # If parsing fails, return error info
             return {
                 "error": f"Failed to parse response: {str(e)}",
                 "raw_response": response,
@@ -178,12 +125,93 @@ Output ONLY valid JSON.
             Dict with 'plays' (list) and 'metadata' (dict)
         """
         
-        # Build context about phases
-        phase_context = f"**GAME PHASES FOR {sport.upper()}:**\n\n"
+        # Build phase context
+        phase_context = "**PHASES:**\n"
         for phase in phases:
-            phase_context += f"**{phase['phase_id']}: {phase['phase_name']}**\n"
-            phase_context += f"- Location: {phase['location']}\n"
-            phase_context += f"- Possession: {phase['possession_state']}\n"
+            phase_context += f"{phase['phase_id']}: {phase['phase_name']} - {phase['location']}, {phase['possession_state']}\n"
+        
+        prompt = f"""Generate PLAYS for {sport}.
+
+{phase_context}
+
+**Play = Specific tactical response to a phase situation**
+
+**Ice Hockey Play Examples:**
+
+For "Offensive Zone Attack" phase:
+- "Drive to Net" - Puck carrier skates directly toward net with speed (DL 3, Very High frequency)
+- "Give-and-Go" - Quick pass to teammate, immediate return pass (DL 4, High frequency)
+- "Basic Cycle" - Maintain possession below goal line, rotate puck support (DL 4, High frequency)
+
+For "Defensive Zone Coverage" phase:
+- "Box Plus One" - Four players in box, one chases puck (DL 5, High frequency)
+- "Collapse to Net" - All players protect home plate area (DL 3, Very High frequency)
+
+**What plays ARE:**
+✅ Specific coordinated tactical actions
+✅ Most FREQUENT in games (not trick plays)
+✅ FOUNDATIONAL (build to more complex)
+✅ Have clear trigger conditions
+✅ Single target_dl (when teams can execute this)
+
+**What plays are NOT:**
+❌ NOT just movements ("skating")
+❌ NOT techniques ("faceoff win")  
+❌ NOT the phase itself
+
+**Generate 3-8 plays per phase. Focus on MOST COMMON, FOUNDATIONAL plays only.**
+
+Use Expert Debate (5 personas):
+1. Game Analyst - "How often does this happen?"
+2. Development Expert - "What DL can execute this?"
+3. Technical Specialist - "Clear trigger?"
+4. Biomechanics Specialist - "Physically sound?"
+5. Best Coach Ever - "Makes coaching sense?"
+
+OUTPUT ONLY THIS JSON:
+
+{{
+  "debate_summary": "Expert debate summary",
+  "plays": [
+    {{
+      "play_id": "PL1",
+      "phase_id": "P1",
+      "play_name": "Specific Play Name",
+      "description": "What players actually DO",
+      "players_involved": 2,
+      "target_dl": 3,
+      "frequency": "Very High",
+      "trigger": "When this situation occurs",
+      "validation_score": 0.94
+    }}
+  ],
+  "quality_metrics": {{
+    "frequency_validation": 0.92,
+    "dl_assignment_validity": 0.96,
+    "trigger_clarity": 0.95,
+    "distinctness": 0.91,
+    "cross_phase_conflicts": 0
+  }},
+  "expert_consensus": "Why these are the most frequent/foundational plays"
+}}
+"""
+        
+        response = self._call_claude(prompt, max_tokens=12000)
+        
+        try:
+            json_match = re.search(r'\{.*\}', response, re.DOTALL)
+            if json_match:
+                result = json.loads(json_match.group())
+            else:
+                result = json.loads(response)
+            
+            return result
+        except json.JSONDecodeError as e:
+            return {
+                "error": f"Failed to parse response: {str(e)}",
+                "raw_response": response,
+                "plays": []
+            }['possession_state']}\n"
             phase_context += f"- Objective: {phase['primary_objective']}\n\n"
         
         prompt = f"""You are generating PLAYS for {sport} using the Enhanced Methodology V3.
