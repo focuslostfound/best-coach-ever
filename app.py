@@ -5,9 +5,11 @@ Main Streamlit application for generating sports curriculum using the Enhanced M
 
 import streamlit as st
 import os
+import pandas as pd
 from datetime import datetime
 from pathlib import Path
 from anthropic import Anthropic
+from generator import CurriculumGenerator, format_phases_for_display, format_plays_for_display
 
 # Get the directory where this script is located
 APP_DIR = Path(__file__).parent
@@ -62,6 +64,13 @@ def init_session_state():
             st.info("Please add your API key in Streamlit Cloud Settings → Secrets")
             st.stop()
         st.session_state.api_client = Anthropic(api_key=api_key)
+    
+    if 'generator' not in st.session_state:
+        # Initialize curriculum generator
+        st.session_state.generator = CurriculumGenerator(
+            st.session_state.api_client,
+            METHODOLOGY_PATH
+        )
     
     # Check for methodology file
     if not METHODOLOGY_PATH.exists():
@@ -220,26 +229,238 @@ def render_phase_approval_screen():
     st.title("1️⃣ Phase Approval")
     st.markdown(f"### Sport: {st.session_state.sport}")
     
-    st.info("Generating phases using Expert Debate System (5 personas)...")
+    # Generate phases if not already generated
+    if st.session_state.phases is None:
+        with st.spinner("🤔 Generating phases using Expert Debate System (5 personas)... This takes 30-60 seconds..."):
+            try:
+                result = st.session_state.generator.generate_phases(st.session_state.sport)
+                
+                # Check for errors
+                if "error" in result:
+                    st.error(f"❌ Generation failed: {result['error']}")
+                    if st.button("🔄 Retry"):
+                        st.rerun()
+                    if st.button("← Back to Home"):
+                        st.session_state.stage = 'home'
+                        st.rerun()
+                    return
+                
+                # Store the results
+                st.session_state.phases = result
+                st.success("✅ Phases generated successfully!")
+                st.rerun()
+                
+            except Exception as e:
+                st.error(f"❌ Error during generation: {str(e)}")
+                if st.button("🔄 Retry"):
+                    st.session_state.phases = None
+                    st.rerun()
+                if st.button("← Back to Home"):
+                    st.session_state.stage = 'home'
+                    st.rerun()
+                return
     
-    # Placeholder for phase generation
-    st.markdown("Phase generation will be implemented next...")
+    # Display the generated phases
+    phases_list = st.session_state.phases.get('phases', [])
     
-    # For now, show back button
-    if st.button("← Back to Home"):
-        st.session_state.stage = 'home'
-        st.rerun()
+    if not phases_list:
+        st.warning("No phases were generated. Please try again.")
+        if st.button("🔄 Retry"):
+            st.session_state.phases = None
+            st.rerun()
+        if st.button("← Back to Home"):
+            st.session_state.stage = 'home'
+            st.rerun()
+        return
+    
+    st.markdown("---")
+    
+    # Show debate summary
+    if 'debate_summary' in st.session_state.phases:
+        with st.expander("📋 Expert Debate Summary", expanded=False):
+            st.info(st.session_state.phases['debate_summary'])
+    
+    # Show quality metrics
+    if 'quality_metrics' in st.session_state.phases:
+        metrics = st.session_state.phases['quality_metrics']
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric("Overlap Score", f"{metrics.get('overlap_score', 0):.2f}", 
+                     help="Should be 0.0 (no overlaps)")
+        with col2:
+            st.metric("Coverage Score", f"{metrics.get('coverage_score', 0):.2f}",
+                     help="Should be 1.0 (complete coverage)")
+        with col3:
+            st.metric("Clarity Score", f"{metrics.get('clarity_score', 0):.2f}",
+                     help="Should be ≥0.95")
+        with col4:
+            consensus = "✅" if metrics.get('consensus_achieved') else "❌"
+            st.metric("Consensus", consensus,
+                     help="All experts must agree")
+    
+    st.markdown("---")
+    st.markdown("### Generated Phases")
+    
+    # Display phases in a table
+    df = pd.DataFrame(format_phases_for_display(phases_list))
+    st.dataframe(df, use_container_width=True, hide_index=True)
+    
+    st.markdown("---")
+    
+    # Expert consensus
+    if 'expert_consensus' in st.session_state.phases:
+        with st.expander("🎯 Expert Consensus", expanded=False):
+            st.success(st.session_state.phases['expert_consensus'])
+    
+    st.markdown("---")
+    
+    # Action buttons
+    col1, col2, col3 = st.columns([1, 2, 2])
+    
+    with col1:
+        if st.button("← Back to Home"):
+            st.session_state.stage = 'home'
+            st.rerun()
+    
+    with col2:
+        if st.button("🔄 Regenerate Phases"):
+            st.session_state.phases = None
+            st.rerun()
+    
+    with col3:
+        if st.button("✅ Approve & Continue to Plays", type="primary"):
+            st.session_state.stage = 'play_approval'
+            st.rerun()
 
 def render_play_approval_screen():
     """Render the play approval screen"""
     st.title("2️⃣ Play Approval")
     st.markdown(f"### Sport: {st.session_state.sport}")
     
-    st.info("Play approval screen - to be implemented...")
+    # Generate plays if not already generated
+    if st.session_state.plays is None:
+        with st.spinner("🤔 Generating plays for all phases... This takes 60-90 seconds..."):
+            try:
+                phases_list = st.session_state.phases.get('phases', [])
+                result = st.session_state.generator.generate_plays(st.session_state.sport, phases_list)
+                
+                # Check for errors
+                if "error" in result:
+                    st.error(f"❌ Generation failed: {result['error']}")
+                    if st.button("🔄 Retry"):
+                        st.rerun()
+                    if st.button("← Back to Phases"):
+                        st.session_state.stage = 'phase_approval'
+                        st.rerun()
+                    return
+                
+                # Store the results
+                st.session_state.plays = result
+                st.success("✅ Plays generated successfully!")
+                st.rerun()
+                
+            except Exception as e:
+                st.error(f"❌ Error during generation: {str(e)}")
+                if st.button("🔄 Retry"):
+                    st.session_state.plays = None
+                    st.rerun()
+                if st.button("← Back to Phases"):
+                    st.session_state.stage = 'phase_approval'
+                    st.rerun()
+                return
     
-    if st.button("← Back to Phases"):
-        st.session_state.stage = 'phase_approval'
-        st.rerun()
+    # Display the generated plays
+    plays_list = st.session_state.plays.get('plays', [])
+    
+    if not plays_list:
+        st.warning("No plays were generated. Please try again.")
+        if st.button("🔄 Retry"):
+            st.session_state.plays = None
+            st.rerun()
+        if st.button("← Back to Phases"):
+            st.session_state.stage = 'phase_approval'
+            st.rerun()
+        return
+    
+    st.markdown("---")
+    
+    # Show debate summary
+    if 'debate_summary' in st.session_state.plays:
+        with st.expander("📋 Expert Debate Summary", expanded=False):
+            st.info(st.session_state.plays['debate_summary'])
+    
+    # Show quality metrics
+    if 'quality_metrics' in st.session_state.plays:
+        metrics = st.session_state.plays['quality_metrics']
+        col1, col2, col3, col4, col5 = st.columns(5)
+        
+        with col1:
+            st.metric("Frequency", f"{metrics.get('frequency_validation', 0):.2f}")
+        with col2:
+            st.metric("DL Validity", f"{metrics.get('dl_assignment_validity', 0):.2f}")
+        with col3:
+            st.metric("Trigger Clarity", f"{metrics.get('trigger_clarity', 0):.2f}")
+        with col4:
+            st.metric("Distinctness", f"{metrics.get('distinctness', 0):.2f}")
+        with col5:
+            conflicts = metrics.get('cross_phase_conflicts', 0)
+            st.metric("Conflicts", conflicts, help="Should be 0")
+    
+    st.markdown("---")
+    st.markdown("### Generated Plays (Grouped by Phase)")
+    
+    # Group plays by phase
+    phases_list = st.session_state.phases.get('phases', [])
+    phase_names = {p['phase_id']: p['phase_name'] for p in phases_list}
+    
+    for phase_id, phase_name in phase_names.items():
+        phase_plays = [p for p in plays_list if p.get('phase_id') == phase_id]
+        
+        if phase_plays:
+            with st.expander(f"**{phase_id}: {phase_name}** ({len(phase_plays)} plays)", expanded=True):
+                df = pd.DataFrame(format_plays_for_display(phase_plays))
+                st.dataframe(df, use_container_width=True, hide_index=True)
+    
+    st.markdown("---")
+    
+    # Expert consensus
+    if 'expert_consensus' in st.session_state.plays:
+        with st.expander("🎯 Expert Consensus", expanded=False):
+            st.success(st.session_state.plays['expert_consensus'])
+    
+    st.markdown("---")
+    
+    # Summary stats
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Total Phases", len(phases_list))
+    with col2:
+        st.metric("Total Plays", len(plays_list))
+    with col3:
+        avg_plays = len(plays_list) / len(phases_list) if phases_list else 0
+        st.metric("Avg Plays/Phase", f"{avg_plays:.1f}")
+    
+    st.markdown("---")
+    
+    # Action buttons
+    col1, col2, col3 = st.columns([1, 2, 2])
+    
+    with col1:
+        if st.button("← Back to Phases"):
+            st.session_state.stage = 'phase_approval'
+            st.rerun()
+    
+    with col2:
+        if st.button("🔄 Regenerate Plays"):
+            st.session_state.plays = None
+            st.rerun()
+    
+    with col3:
+        if st.button("✅ Approve & Start Auto-Generation", type="primary"):
+            st.session_state.stage = 'auto_generation'
+            st.session_state.generation_start_time = datetime.now()
+            st.rerun()
 
 def render_auto_generation_screen():
     """Render the auto-generation progress screen"""
